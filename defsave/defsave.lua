@@ -106,9 +106,13 @@ function M.get_file_path(file)
 		return nil
 	end
 	if M.sysinfo.system_name == "Linux" then
-		-- For Linux we must modify the default path to make Linux users happy
-		local appname = "config/" .. tostring(M.appname)
-		return sys.get_save_file(appname, file)
+		-- Add config/ as a prefix to the file name
+		local save_path = sys.get_save_file(M.appname, "") -- get the base save path
+		local config_dir = save_path .. "/config"
+		if not sys.create_folder(config_dir) then
+			print("DefSave: Failed to create config directory at " .. config_dir)
+		end
+		return sys.get_save_file(M.appname, "config/" .. file)
 	end
 	if html5 then
 		-- For HTML5 there's no need to get the full path
