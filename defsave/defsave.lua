@@ -4,20 +4,21 @@ local utf8 = require("defsave.utf8")
 
 local M = {}
 
-M.autosave = false -- set to true to autosave all loaded files that are changed on a timer
-M.autosave_timer = 10 -- amount of seconds between autosaves if changes have been made
-M.timer = 0 -- current timer value only increases if autosave is enabled
-M.changed = false -- locally used but can be useful to have exposed
-M.verbose = true -- if true then more information will be printed such as autosaves
-M.block_reloading = false -- if true then files already loaded will never be overwritten with a reload
-M.appname = "defsave" -- determines part of the path for saving files to
-M.loaded = {} -- list of files currently loaded
+M.autosave = false           -- set to true to autosave all loaded files that are changed on a timer
+M.autosave_timer = 10        -- amount of seconds between autosaves if changes have been made
+M.timer = 0                  -- current timer value only increases if autosave is enabled
+M.changed = false            -- locally used but can be useful to have exposed
+M.verbose = true             -- if true then more information will be printed such as autosaves
+M.block_reloading = false    -- if true then files already loaded will never be overwritten with a reload
+M.appname = "defsave"        -- determines part of the path for saving files to
+M.loaded = {}                -- list of files currently loaded
 M.sysinfo = sys.get_sys_info()
-M.use_default_data = true -- if true will attempt to load default data from the default_data table when loading empty file
-M.enable_encryption = false -- if true then all data saved and loaded will be encrypted with AES - SLOWER
+M.use_default_data = true    -- if true will attempt to load default data from the default_data table when loading empty file
+M.enable_encryption = false  -- if true then all data saved and loaded will be encrypted with AES - SLOWER
 M.encryption_key = "defsave" -- pick an encryption key to use if you're using encryption
-M.enable_obfuscation= false -- if true then all data saved and loaded will be XOR obfuscated - FASTER
-M.obfuscation_key = "defsave" -- pick an obfuscation key it use if you're using encryption, the longer the key for obfuscation the better
+M.enable_obfuscation = false -- if true then all data saved and loaded will be XOR obfuscated - FASTER
+M.obfuscation_key =
+"defsave"                    -- pick an obfuscation key it use if you're using encryption, the longer the key for obfuscation the better
 M.use_serialize = false
 -- You don't have to save your keys directly in one file as a single string... you can get creative with how you store your keys
 -- Don't expect your save files to not be unlocked by someone eventually, don't store sensetive data in your files!
@@ -27,7 +28,7 @@ M.use_serialize = false
 M.default_data = {} -- default data to set files to if any cannnot be loaded
 
 
-local get_localStorage =  [[
+local get_localStorage = [[
 (function() {
 	try {
 		return window.localStorage.getItem('%s') || '{}';
@@ -37,7 +38,7 @@ local get_localStorage =  [[
 }) ()
 ]]
 
-local set_localStorage =  [[
+local set_localStorage = [[
 (function() {
 	try {
 		window.localStorage.setItem('%s','%s');
@@ -61,14 +62,13 @@ function M.obfuscate(input, key)
 	local input_length = #input
 	local key_length = #key
 
-	for i=1, input_length do
-		local character = string.byte(input:sub(i,i))
+	for i = 1, input_length do
+		local character = string.byte(input:sub(i, i))
 		if key_iterator >= key_length + 1 then key_iterator = 1 end -- cycle
-		local key_byte = string.byte(key:sub(key_iterator,key_iterator))
-		output = output .. string.char(bit.bxor( character , key_byte))
+		local key_byte = string.byte(key:sub(key_iterator, key_iterator))
+		output = output .. string.char(bit.bxor(character, key_byte))
 
 		key_iterator = key_iterator + 1
-
 	end
 	return output
 end
@@ -97,6 +97,18 @@ local function copy(t) -- shallow-copy a table
 	return target
 end
 
+-- Create a folder if it does not exist (cross-platform)
+local function create_folder(path)
+	local sysinfo = M.sysinfo or { system_name = "Linux" }
+	if sysinfo.system_name == "Windows" then
+		-- Windows: mkdir returns 0 if successful or folder already exists
+		return os.execute('mkdir "' .. path .. '"') == 0
+	else
+		-- Linux/macOS: mkdir -p creates parent directories as needed
+		return os.execute('mkdir -p "' .. path .. '"') == 0
+	end
+end
+
 function M.get_file_path(file)
 	if M.appname == "defsave" then
 		print("DefSave: You need to set a non-default appname to defsave.appname")
@@ -109,7 +121,7 @@ function M.get_file_path(file)
 		-- Add config/ as a prefix to the file name
 		local save_path = sys.get_save_file(M.appname, "") -- get the base save path
 		local config_dir = save_path .. "/config"
-		if not sys.create_folder(config_dir) then
+		if not create_folder(config_dir) then
 			print("DefSave: Failed to create config directory at " .. config_dir)
 		end
 		return sys.get_save_file(M.appname, "config/" .. file)
@@ -122,7 +134,6 @@ function M.get_file_path(file)
 end
 
 function M.load(file)
-
 	if file == nil then
 		print("DefSave: Warning no file specified when attempting to load")
 		return nil
@@ -137,7 +148,8 @@ function M.load(file)
 
 	if M.loaded[file] ~= nil then
 		if M.block_reloading == false then
-			print("DefSave: Warning the file " .. file .. " was already loaded and will be reloaded possibly overwriting changes")
+			print("DefSave: Warning the file " ..
+				file .. " was already loaded and will be reloaded possibly overwriting changes")
 		else
 			print("DefSave: Warning attempt to reload already file has been blocked")
 			return true
@@ -153,12 +165,12 @@ function M.load(file)
 		if web_data == "{}" then
 			loaded_file = {}
 		elseif M.use_serialize then
-			loaded_file = sys.deserialize( defsave_ext.decode_base64(web_data) )
+			loaded_file = sys.deserialize(defsave_ext.decode_base64(web_data))
 		else
 			loaded_file = json.decode(web_data)
 		end
 	else
-		loaded_file  = sys.load(path)
+		loaded_file = sys.load(path)
 	end
 
 	local empty = false
@@ -175,7 +187,6 @@ function M.load(file)
 		else
 			return false
 		end
-
 	elseif empty then
 		print("DefSave: The " .. file .. " is loaded but it was empty")
 		M.loaded[file] = {}
@@ -190,10 +201,9 @@ function M.load(file)
 	M.loaded[file].changed = false
 	M.loaded[file].data = loaded_file
 
-	if M.verbose then  print("DefSave: The file '" .. file .. "' was successfully loaded") end
+	if M.verbose then print("DefSave: The file '" .. file .. "' was successfully loaded") end
 
 	return true
-
 end
 
 function M.save(file, force)
@@ -205,7 +215,10 @@ function M.save(file, force)
 	end
 
 	if M.loaded[file].changed == false and force == false then
-		if M.verbose then  print("DefSave: File '" .. file .. "' is unchanged so not saving, set force flag to true to force saving if changed flag is false") end
+		if M.verbose then
+			print("DefSave: File '" ..
+				file .. "' is unchanged so not saving, set force flag to true to force saving if changed flag is false")
+		end
 		return true
 	end
 
@@ -218,11 +231,11 @@ function M.save(file, force)
 		local encoded_data = ""
 
 		if M.use_serialize then
-			encoded_data = defsave_ext.encode_base64( sys.serialize(M.loaded[file].data) )
+			encoded_data = defsave_ext.encode_base64(sys.serialize(M.loaded[file].data))
 		else
 			encoded_data = json.encode(M.loaded[file].data):gsub("'", "\'") -- escape ' characters
 		end
-		
+
 		is_save_successful = html5.run(string.format(set_localStorage, path, encoded_data))
 	else
 		is_save_successful = sys.save(path, M.loaded[file].data)
@@ -231,13 +244,13 @@ function M.save(file, force)
 	if is_save_successful then
 		if M.verbose then print("DefSave: File '" .. tostring(file) .. "' has been saved to the path '" .. path .. "'") end
 		M.loaded[file].changed = false
-		return true	
+		return true
 	else
-		print("DefSave: Something went wrong when attempting to save the file '" .. tostring(file) .. "' to the path '" .. path .. "'")
+		print("DefSave: Something went wrong when attempting to save the file '" ..
+			tostring(file) .. "' to the path '" .. path .. "'")
 		return nil
 	end
 end
-
 
 function M.save_all(force)
 	force = force or false
@@ -253,11 +266,13 @@ function M.get(file, key)
 			local value = clone(M.loaded[file].data[key])
 			return value
 		else
-			print("DefSave: Warning when attempting to get a key '" .. key .. "' of file '" .. tostring(file) .. "' the key was nil")
+			print("DefSave: Warning when attempting to get a key '" ..
+				key .. "' of file '" .. tostring(file) .. "' the key was nil")
 			return nil
 		end
 	else
-		print("DefSave: Warning when attempting to get a key '" .. key .. "' the file '" .. tostring(file) .. "' could not be found in loaded list")
+		print("DefSave: Warning when attempting to get a key '" ..
+			key .. "' the file '" .. tostring(file) .. "' could not be found in loaded list")
 		return nil
 	end
 end
@@ -271,7 +286,8 @@ function M.set(file, key, value)
 		M.changed = true
 		return true
 	else
-		print("DefSave: Warning when attempting to set a key '" .. key .. "' the file '" .. tostring(file) .. "' could not be found in loaded list")
+		print("DefSave: Warning when attempting to set a key '" ..
+			key .. "' the file '" .. tostring(file) .. "' could not be found in loaded list")
 		return nil
 	end
 end
@@ -308,7 +324,6 @@ function M.reset_to_default(file)
 	end
 end
 
-
 function M.is_loaded(file)
 	if M.loaded[file] ~= nil then
 		return true
@@ -316,8 +331,6 @@ function M.is_loaded(file)
 		return false
 	end
 end
-
-
 
 function M.update(dt)
 	if M.autosave == true then
